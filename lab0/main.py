@@ -7,87 +7,92 @@ def d_sigmoid(x):
     return x * (1 - x)
 
 def dataset():
-    return np.array([[0, 0], [0, 1], [1, 0], [1, 1]]), np.array([0, 1, 1, 0])
+    return np.array([[0, 0], [0, 1], [1, 0], [1, 1]]), np.array([[0], [1], [1], [0]])
 
-class NN:
-    def __init__(self):
-        self.in_size = 2
-        self.hidden_size = 2
-        self.out_size = 1
-        # hidden layer weights
-        self.wh = np.random.randn(self.hidden_size, self.in_size) / np.sqrt(self.hidden_size)
-        # hidden layer bias
-        self.bh = np.random.randn(self.hidden_size)
-        # hidden layer outputs
-        self.oh = np.zeros(self.hidden_size) 
-        # output layer weights
-        self.wo = np.random.randn(self.out_size, self.hidden_size) / np.sqrt(self.out_size)
-        # output layer bias
-        self.bo = np.random.randn(self.out_size)
-        # output layer outputs
-        self.out = np.zeros(self.out_size) 
+class FC:
+    def __init__(self, in_size, out_size):
+        self.in_size = in_size
+        self.out_size = out_size
+        self.w = np.random.randn(self.out_size, self.in_size)
+        self.x = np.zeros((self.out_size, self.in_size))
+        self.b = np.random.randn(self.out_size)
+        self.out = np.zeros(self.out_size)
+        self.prev = None
 
-    def forward(self, data):
-        self.oh = np.zeros(self.hidden_size)
+    def __call__(self, x):
+        if type(x) == FC:
+            self.prev = x
+            input = x.out
+        else:
+            input = x
+
+        self.forward(input)
+        return self
+
+    def forward(self, x):
+        self.x = x
         self.out = np.zeros(self.out_size)
 
-        for i in range(self.hidden_size):
-            for j in range(self.in_size):
-                self.oh[i] += self.wh[i][j] * data[j]
-            self.oh[i] += self.bh[i]
-            self.oh[i] = sigmoid(self.oh[i])
-
-        for i in range(self.out_size):
-            for j in range(self.hidden_size):
-                self.out[i] += self.wo[i][j] * self.oh[j]
-            self.out[i] += self.bo[i]
-            self.out[i] = sigmoid(self.out[i])
+        self.out = np.matmul(self.w, self.x.T) + self.b
+        self.out = sigmoid(self.out)
 
         return self.out
 
-    def backward(self, data, target, out, learning_rate):
-        output_delta = np.zeros(self.out_size)
+    def backward(self, prev_delta, learning_rate):
+        delta = prev_delta * d_sigmoid(self.out)
+        next_delta = np.matmul(delta, self.w)
 
-        for i in range(self.out_size):
-            error = target[i] - out[i]
-            output_delta[i] = error * -1 * d_sigmoid(out[i])
+        self.w -= np.multiply.outer(delta, self.x) * learning_rate
+        self.b -= delta * learning_rate
 
-        for i in range(self.out_size):
-            for j in range(self.hidden_size):
-                self.wo[i][j] -= output_delta[i] * self.oh[j] * learning_rate
-            self.bo[i] -= output_delta[i] * learning_rate
+        if self.prev:
+            self.prev.backward(next_delta, learning_rate)
 
-        hidden_delta = np.zeros(self.hidden_size)
+class Loss:
+    def __init__(self, output, target, lr):
+        self.output = output
+        self.target = target
+        self.lr = lr
 
-        for i in range(self.hidden_size):
-            error = 0.0
-            for j in range(self.out_size):
-                error += output_delta[j] * self.wo[j][i]
-            hidden_delta[i] = error * d_sigmoid(self.oh[i])
+    def backward(self):
+        self.output.backward(self.output.out - self.target, self.lr)
 
-        for i in range(self.hidden_size):
-            for j in range(self.in_size):
-                self.wh[i][j] -= hidden_delta[i] * data[j] * learning_rate
-            self.bh[i] -= hidden_delta[i] * learning_rate
+class Net:
+    def __init__(self):
+        self.fc1 = FC(2, 2)
+        self.fc2 = FC(2, 4)
+        self.fc3 = FC(4, 1)
+
+    def forward(self, x):
+        out = self.fc1(x)
+        out = self.fc2(out)
+        out = self.fc3(out)
+        return out
 
 def main():
     data, target = dataset()
-    epochs = 100000
-    learning_rate = 1e-2
+    epochs = 40000
+    learning_rate = 1e-1
     np.random.seed(0)
-    nn = NN()
+    model = Net()
 
+    # train
     for epoch in range(epochs):
         for d, t in zip(data, target):
-            out = nn.forward(d)
-            nn.backward(d, [t], out, learning_rate)
+            out = model.forward(d)
+            loss = Loss(out, t, learning_rate)
+            loss.backward()
 
-        if epoch % 1000 == 0:
+        if epoch % 100 == 0:
             loss = 0
             for d, t in zip(data, target):
-                loss += (nn.forward(d)[0] - t) ** 2
+                loss += np.sum((model.forward(d).out - t) ** 2)
 
             print("Epoch {}: Loss {}".format(epoch, loss))
+
+    # eval
+    for d in data:
+        print(d, model.forward(d).out)
 
 if __name__ == '__main__':
     main()
