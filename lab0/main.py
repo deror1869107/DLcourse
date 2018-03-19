@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 def sigmoid(x):
     return 1.0 / (1.0 + np.exp(-x))
@@ -13,8 +14,7 @@ class FC:
     def __init__(self, in_size, out_size):
         self.in_size = in_size
         self.out_size = out_size
-        self.w = np.random.randn(self.out_size, self.in_size)
-        self.x = np.zeros((self.out_size, self.in_size))
+        self.w = np.random.randn(self.in_size, self.out_size)
         self.b = np.random.randn(self.out_size)
         self.out = np.zeros(self.out_size)
         self.prev = None
@@ -31,18 +31,16 @@ class FC:
 
     def forward(self, x):
         self.x = x
-        self.out = np.zeros(self.out_size)
-
-        self.out = np.matmul(self.w, self.x.T) + self.b
+        self.out = np.matmul(self.w.T, self.x) + self.b
         self.out = sigmoid(self.out)
 
         return self.out
 
     def backward(self, prev_delta, learning_rate):
         delta = prev_delta * d_sigmoid(self.out)
-        next_delta = np.matmul(delta, self.w)
+        next_delta = np.matmul(self.w, delta)
 
-        self.w -= np.multiply.outer(delta, self.x) * learning_rate
+        self.w -= np.multiply.outer(self.x, delta) * learning_rate
         self.b -= delta * learning_rate
 
         if self.prev:
@@ -74,6 +72,7 @@ def main():
     epochs = 40000
     learning_rate = 1e-1
     np.random.seed(0)
+    loss_record = []
     model = Net()
 
     # train
@@ -88,11 +87,16 @@ def main():
             for d, t in zip(data, target):
                 loss += np.sum((model.forward(d).out - t) ** 2)
 
+            loss_record.append((epoch, loss))
+
             print("Epoch {}: Loss {}".format(epoch, loss))
 
     # eval
     for d in data:
         print(d, model.forward(d).out)
+
+    plt.plot(*zip(*loss_record))
+    plt.savefig('loss.png')
 
 if __name__ == '__main__':
     main()
